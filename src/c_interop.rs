@@ -1,5 +1,4 @@
-use libc::types::os::common::bsd44::in6_addr;
-use libc::{c_int, c_short};
+use libc::{in6_addr, c_int, c_short, c_ulong};
 
 include!(concat!(env!("OUT_DIR"), "/constants.rs"));
 

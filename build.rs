@@ -1,5 +1,3 @@
-#![feature(env, fs, io, path, process)]
-
 use std::env;
 use std::path::Path;
 use std::process::Command;

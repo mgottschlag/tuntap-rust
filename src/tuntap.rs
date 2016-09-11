@@ -4,14 +4,15 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::io;
+use std::mem;
 use std::os::unix::prelude::AsRawFd;
 use std::path::Path;
 use libc::c_int;
-use libc::consts::os::bsd44::{AF_INET6, SOCK_DGRAM};
-use libc::funcs::bsd43::socket;
-use libc::funcs::bsd44::ioctl;
-use libc::funcs::posix88::unistd::close;
-use libc::types::os::common::bsd44::in6_addr;
+use libc::{AF_INET6, SOCK_DGRAM};
+use libc::socket;
+use libc::ioctl;
+use libc::close;
+use libc::in6_addr;
 use c_interop::*;
 
 
@@ -50,7 +51,7 @@ impl fmt::Debug for TunTap {
 
 impl TunTap {
 	pub fn create(typ: TunTapType) -> TunTap {
-		TunTap::create_named(typ, &CString::from_slice(&[]))
+		TunTap::create_named(typ, &CString::new("").unwrap())
 	}
 
 	pub fn create_named(typ: TunTapType, name: &CString) -> TunTap {
@@ -119,12 +120,12 @@ impl TunTap {
 	}
 
 	pub fn get_name(&self) -> CString {
-		let nul_pos = match self.if_name.as_slice().position_elem(&0) {
+		let nul_pos = match (&self.if_name[..]).iter().position(|&x| x == 0) {
 			Some(p) => p,
 			None => panic!("Device name should be null-terminated")
 		};
 
-		CString::from_slice(&self.if_name[..nul_pos])
+		CString::new(&self.if_name[..nul_pos]).unwrap()
 	}
 
 	pub fn up(&self) {
@@ -159,17 +160,13 @@ impl TunTap {
 			panic!("IPv4 not implemented");
 		}
 		else if ip.len() == 16 {
+			// https://github.com/rust-lang/libc/issues/55
+			let mut addr: in6_addr = unsafe { mem::uninitialized() };
+			for i in 0..16 {
+				addr.s6_addr[i] = ip[i];
+			}
 			let mut req = in6_ifreq {
-				ifr6_addr: in6_addr {s6_addr: [
-					(ip[ 1] as u16) << 8 | ip[ 0] as u16,
-					(ip[ 3] as u16) << 8 | ip[ 2] as u16,
-					(ip[ 5] as u16) << 8 | ip[ 4] as u16,
-					(ip[ 7] as u16) << 8 | ip[ 6] as u16,
-					(ip[ 9] as u16) << 8 | ip[ 8] as u16,
-					(ip[11] as u16) << 8 | ip[10] as u16,
-					(ip[13] as u16) << 8 | ip[12] as u16,
-					(ip[15] as u16) << 8 | ip[14] as u16
-				]},
+				ifr6_addr: addr,
 				ifr6_prefixlen: 8,
 				ifr6_ifindex: self.if_index
 			};
